@@ -57,6 +57,10 @@
     <ClCompile Include="BBox.cpp" />
     <ClCompile Include="PinholeCamera.cpp" />
     <ClCompile Include="..\SamplingMethods\Sampling.cpp" />
+    <ClCompile Include="ThinLens.cpp" />
+    <ClCompile Include="Directional.cpp" />
+    <ClCompile Include="Light.cpp" />
+    <ClCompile Include="Ambient.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="src">
@@ -130,6 +134,10 @@
     <ClInclude Include="BBox.h" />
     <ClInclude Include="PinholeCamera.h" />
     <ClInclude Include="Sampling.h" />
+    <ClInclude Include="ThinLens.h" />
+    <ClInclude Include="Directional.h" />
+    <ClInclude Include="Light.h" />
+    <ClInclude Include="Ambient.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="icon.rc" />

@@ -191,9 +191,12 @@ C:\Users\Jacob\source\repos\SamplingOF\addons\ofxGui\src</AdditionalIncludeDirec
     <ClCompile Include="..\..\..\addons\ofxGui\src\ofxSliderGroup.cpp" />
     <ClCompile Include="..\..\..\addons\ofxGui\src\ofxToggle.cpp" />
     <ClCompile Include="..\SamplingMethods\Sampling.cpp" />
+    <ClCompile Include="Ambient.cpp" />
     <ClCompile Include="BBox.cpp" />
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="Directional.cpp" />
     <ClCompile Include="GeometricObject.cpp" />
+    <ClCompile Include="Light.cpp" />
     <ClCompile Include="Maths.cpp" />
     <ClCompile Include="Matrix.cpp" />
     <ClCompile Include="Mesh.cpp" />
@@ -209,6 +212,7 @@ C:\Users\Jacob\source\repos\SamplingOF\addons\ofxGui\src</AdditionalIncludeDirec
     <ClCompile Include="Sphere.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ofApp.cpp" />
+    <ClCompile Include="ThinLens.cpp" />
     <ClCompile Include="Triangle.cpp" />
     <ClCompile Include="Vector3D.cpp" />
     <ClCompile Include="ViewPlane.cpp" />
@@ -225,10 +229,13 @@ C:\Users\Jacob\source\repos\SamplingOF\addons\ofxGui\src</AdditionalIncludeDirec
     <ClInclude Include="..\..\..\addons\ofxGui\src\ofxSlider.h" />
     <ClInclude Include="..\..\..\addons\ofxGui\src\ofxSliderGroup.h" />
     <ClInclude Include="..\..\..\addons\ofxGui\src\ofxToggle.h" />
+    <ClInclude Include="Ambient.h" />
     <ClInclude Include="BBox.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Constants.h" />
+    <ClInclude Include="Directional.h" />
     <ClInclude Include="GeometricObject.h" />
+    <ClInclude Include="Light.h" />
     <ClInclude Include="Maths.h" />
     <ClInclude Include="Matrix.h" />
     <ClInclude Include="Mesh.h" />
@@ -244,6 +251,7 @@ C:\Users\Jacob\source\repos\SamplingOF\addons\ofxGui\src</AdditionalIncludeDirec
     <ClInclude Include="ShadeRec.h" />
     <ClInclude Include="Sphere.h" />
     <ClInclude Include="src\ofApp.h" />
+    <ClInclude Include="ThinLens.h" />
     <ClInclude Include="Triangle.h" />
     <ClInclude Include="Vector3D.h" />
     <ClInclude Include="ViewPlane.h" />

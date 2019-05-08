@@ -20,6 +20,7 @@ class ofApp : public ofBaseApp{
 		void dragEvent(ofDragInfo dragInfo);
 		void drawImage();
 		void drawImageWithJittered();
+		void drawImageWithThinLens();
 		bool isBlack(long x, long y, long z);
 		void gotMessage(ofMessage msg);
 };

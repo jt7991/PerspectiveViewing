@@ -1,7 +1,6 @@
 #include "ofApp.h"
 #include "of3dGraphics.h"
 #include "ofApp.h"
-//#include "../Sampling.h"
 #include "ofxGui/src/ofxGui.h"
 #include "../ViewPlane.h"
 #include "../Sphere.h"
@@ -12,15 +11,18 @@
 #include "../PinholeCamera.h"
 #include "../Sampling.h"
 #include "../Point2D.h"
+#include "../ThinLens.h"
+#include "../Ambient.h"
 ofxToggle toggleAntialiasing;
 
 double minX, maxX, minY, maxY;
 ofImage img;
 ofxPanel gui;
-ofParameterGroup sphereCenter, cameraEye, cameraLookAt, renderImage;
-ofParameter<int> sphereCenterX, sphereCenterY, sphereCenterZ, 
-	cameraEyeX, cameraEyeY, cameraEyeZ, cameraLookAtX, cameraLookAtY, cameraLookAtZ, numSamples;
-ofParameter<void> drawImageWithRandomBtn, drawImageWithJitteredBtn;
+ofParameterGroup sphereCenter, cameraEye, cameraLookAt, renderImage, renderImageThinLens, numberOfSamplesGroup, lighting;
+ofParameter<int> sphereCenterX, sphereCenterY, sphereCenterZ,
+	cameraEyeX, cameraEyeY, cameraEyeZ, cameraLookAtX, cameraLookAtY, cameraLookAtZ, numSamples, focalDistance;
+ofParameter<float> lensRadius, ambientScaleRadiance;
+ofParameter<void> drawImageWithRandomBtn, drawImageWithJitteredBtn, drawImageThinLens;
 ViewPlane viewPlane = ViewPlane(500, 500);
 Plane plane;
 Sphere sphereYellow;
@@ -52,28 +54,37 @@ void ofApp::setup() {
 	cameraLookAt.add(cameraLookAtY.set("Y", 0, -1000, 1000));
 	cameraLookAt.add(cameraLookAtZ.set("Z", 1000, -1000, 1000));
 
-
+	lighting.setName("Lighting");
+	lighting.add(ambientScaleRadiance.set("Ambient Scale Radiance", 1, 0, 1));
 
 	img.allocate(viewPlane.hres, viewPlane.vres, OF_IMAGE_COLOR);
 	img.setColor(ofColor(0));
-
-	plane = Plane(Point3D(0, 0, 0), Normal(Vector3D(0, 1, 0)));
-
-	renderImage.setName("Image Rendering Options");
-	renderImage.add(numSamples.set("Number Of Samples", 1000, 0, 1000000));
-	renderImage.add(drawImageWithRandomBtn.set("Draw Image With Random Sampling"));
-	drawImageWithRandomBtn.addListener(this, &ofApp::drawImage);
-
+	
+	numberOfSamplesGroup.setName("Number Of Samples");
+	numberOfSamplesGroup.add(numSamples.set("Number Of Samples", 10, 1, 100));
+	
+	renderImage.setName("Pinhole Camera");
 	renderImage.add(drawImageWithJitteredBtn.set("Draw Image With Jittered Sampling"));
 	drawImageWithJitteredBtn.addListener(this, &ofApp::drawImageWithJittered);
 	
-	
+	renderImageThinLens.setName("Thin Lens Camera");
+	renderImageThinLens.add(lensRadius.set("Lens Radius", 1, 0, 5));
+	renderImageThinLens.add(focalDistance.set("Focal Distance", 100, 1, 1000));
+	renderImageThinLens.add(drawImageThinLens.set("Draw Image With Jittered Sampling"));
+	drawImageThinLens.addListener(this, &ofApp::drawImageWithThinLens);
+
+
 	gui.add(sphereCenter);
 	gui.add(cameraEye);
 	gui.add(cameraLookAt);
+	gui.add(lighting);
+	gui.add(numberOfSamplesGroup);
 	gui.add(renderImage);
+	gui.add(renderImageThinLens);
 
-	//gui.draw();
+	plane = Plane(Point3D(0, 0, 0), Normal(Vector3D(0, 1, 0)));
+	boxOrange = BBox(Point3D(-60, 0, 200), Point3D(80, 120, 220));
+	triangleGreen = Triangle(Point3D(-290, 0, 360), Point3D(-260, 160, 350), Point3D(250, 130, 330));
 }
 
 //--------------------------------------------------------------
@@ -214,66 +225,201 @@ void ofApp::drawImageWithJittered() {
 	Ray ray = Ray(); //the default direction is (0,0,1) which is what we want for all our rays here.
 	ShadeRec hitReturnData = ShadeRec();
 	double hitTime;
-	ofColor pixelColor = NULL;
 	ofColor YELLOW = ofColor(255, 255, 0);
 	ofColor GREEN = ofColor(0, 200, 0);
 	ofColor ORANGE = ofColor(255, 155, 0);
 	sphereYellow = Sphere(sphereCenterX, sphereCenterY, sphereCenterZ, 30);
-	boxOrange = BBox(Point3D(-20, -30, 120), Point3D(40, 90, 150));
-	triangleGreen = Triangle(Point3D(-90, 0, 60), Point3D(-60, 60, 150), Point3D(50, 30, 130));
-	//                                   Eye                             Look At               Up Vector      dist   Near Clip    Far Clip
+
+	//                                   Eye                             Look At                                        Up Vector         dist    lensRad    focalDistance   zoom
 	PinholeCamera camera(Point3D(cameraEyeX, cameraEyeY, cameraEyeZ), Point3D(cameraLookAtX, cameraLookAtY, cameraLookAtZ), Vector3D(0, 1, 0), 100, 20, 1000);
 	camera.computeUVW();
 	Point2D* points = new Point2D[numSamples];
 	Sampling sampling;
-	sampling.getJitteredPoints(0.0, 500.0, 0.0, 500, (double)numSamples, points);
-	for (int i = 0; i < numSamples; i++) {
-		double minHitTime = std::numeric_limits<double>::max();
-		ofColor pixelColor = NULL;
 
-		ray.start = camera.eye;
+	sampling.getJitteredPoints(numSamples, points);
+	
+	for (int i = 0; i < viewPlane.hres; i++) {
+		for (int j = 0; j < viewPlane.hres; j++) {
+			int red = 0, green = 0, blue = 0;
+			bool sphereHit = false;
+			bool triangleHit = false;
+			bool boxHit = false;
+			for (int k = 0; k < numSamples; k++) {
+				double minHitTime = std::numeric_limits<double>::max();
 
+				ray.start = camera.eye;
+				//std::cout << points[k].x << "\n";
+				double viewX = viewPlane.pixelSize * -(j - .5* (viewPlane.hres - 1) + points[k].x);
+				double viewY = viewPlane.pixelSize * -(i - .5 * (viewPlane.vres - 1) + points[k].y);
+				Vector3D direction = viewX * camera.u + viewY * camera.v - camera.viewDistance * camera.w;
+				ray.dir = direction / direction.magnitude();
 
+				char closestObject = 'X';
+				if (sphereYellow.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						minHitTime = hitTime;
+						closestObject = 'S';
 
-		double viewX = viewPlane.pixelSize * (points[i].x - 0.5*(viewPlane.hres - 1));
-		double viewY = viewPlane.pixelSize * ((viewPlane.vres - points[i].y) - 0.5*(viewPlane.vres - 1));
-		Vector3D direction = viewX * camera.u + viewY * camera.v - camera.viewDistance * camera.w;
-		ray.dir = direction / direction.magnitude();
-		if (sphereYellow.hit(ray, hitTime, hitReturnData)) {
-			if (hitTime < minHitTime) {
-				minHitTime = hitTime;
-				pixelColor = YELLOW;
-			}
-		}
-		if (boxOrange.hit(ray, hitTime, hitReturnData)) {
-			if (hitTime < minHitTime) {
-				minHitTime = hitTime;
-				pixelColor = ORANGE;
-			}
-		}
-		if (triangleGreen.hit(ray, hitTime, hitReturnData)) {
-			if (hitTime < minHitTime) {
-				minHitTime = hitTime;
-				pixelColor = GREEN;
-			}
-		}
-		if (plane.hit(ray, hitTime, hitReturnData)) {
-			if (hitTime < minHitTime) {
-				minHitTime = hitTime;
-				if (isBlack(hitReturnData.local_hit_point.x, hitReturnData.local_hit_point.y, hitReturnData.local_hit_point.z)) {
-					pixelColor = ofColor(0);
+					}
 				}
-				else {
-					pixelColor = ofColor(255);
-				}
-			}
-		}
+				if (boxOrange.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						minHitTime = hitTime;
+						closestObject = 'B';
 
-		if (pixelColor != NULL) {
-			img.setColor(points[i].x, points[i].y, pixelColor);
+					}
+				}
+				if (triangleGreen.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						minHitTime = hitTime;
+						closestObject = 'T';
+
+					}
+				}
+				if (plane.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						closestObject = 'P';
+						minHitTime = hitTime;
+
+					}
+				}
+				switch (closestObject) {
+				case 'S':
+					red += 255;
+					green += 255;
+					blue += 0;
+					break;
+				case 'B':
+					red += 255;
+					green += 155;
+					blue += 0;
+					break;
+				case 'T':
+					red += 0;
+					green += 200;
+					blue += 0;
+					break;
+				case 'P':
+					if (!isBlack(hitReturnData.local_hit_point.x, hitReturnData.local_hit_point.y, hitReturnData.local_hit_point.z)) {
+						red += 255;
+						green += 255;
+						blue += 255;
+					}
+				default:
+					break;
+				}
+
+
+			}
+			red = red / numSamples;
+			green = green / numSamples;
+			blue = blue / numSamples;
+			ofColor pixelColor = ofColor(red, green, blue);
+			img.setColor(j, i, pixelColor);
 		}
 	}
-	delete [] points;
+	delete[] points;
+	img.update();
+
+}
+
+void ofApp::drawImageWithThinLens() {
+	img.setColor(ofColor(0));
+	Ray ray = Ray(); 
+	ShadeRec hitReturnData = ShadeRec();
+	double hitTime;
+	ofColor YELLOW = ofColor(255, 255, 0);
+	ofColor GREEN = ofColor(0, 200, 0);
+	ofColor ORANGE = ofColor(255, 155, 0);
+	sphereYellow = Sphere(sphereCenterX, sphereCenterY, sphereCenterZ, 30);
+
+	ThinLens camera(Point3D(cameraEyeX, cameraEyeY, cameraEyeZ), Point3D(cameraLookAtX, cameraLookAtY, cameraLookAtZ), Vector3D(0, 1, 0),   100,    lensRadius,           focalDistance,     1);
+	double totalNumSamples = numSamples * viewPlane.hres * viewPlane.vres;
+	Point2D* points = new Point2D[numSamples];
+	Point2D* lensPoints = new Point2D[totalNumSamples];
+	Sampling sampling;
+	sampling.getJitteredPoints(numSamples, points);
+	sampling.getDiscSamples(totalNumSamples, lensPoints);
+	Ambient ambient;
+	ambient.scale_radiance(ambientScaleRadiance);
+	int pointIndex = 0;
+	for (int i = 0; i < viewPlane.vres; i++) {
+		for (int j = 0; j < viewPlane.hres; j++) {
+			int red=0, green=0, blue=0;
+			for (int k = 0; k < numSamples; k++) {
+				double minHitTime = std::numeric_limits<double>::max();
+				Point2D lensPoint (camera.lensRadius * lensPoints[pointIndex].x, camera.lensRadius * lensPoints[pointIndex].y);
+				ray.start = Point3D(camera.eye.x + lensPoint.x, camera.eye.y + lensPoint.y, camera.eye.z);
+				double viewX = viewPlane.pixelSize * -(j - .5* (viewPlane.hres-1)+ points[k].x);
+				double viewY = viewPlane.pixelSize * -(i - .5 * (viewPlane.vres-1) + points[k].y);
+				Vector3D direction = camera.rayDirection(Point2D(viewX, viewY), lensPoint);
+				ray.dir = direction;
+				char closestObject = 'X';
+				if (sphereYellow.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						minHitTime = hitTime;
+						closestObject = 'S';
+
+					}
+				}
+				if (boxOrange.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						minHitTime = hitTime;
+						closestObject = 'B';
+
+					}
+				}
+				if (triangleGreen.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						minHitTime = hitTime;
+						closestObject = 'T';
+
+					}
+				}
+				if (plane.hit(ray, hitTime, hitReturnData)) {
+					if (hitTime < minHitTime) {
+						closestObject = 'P';
+						minHitTime = hitTime;
+
+					}
+				}
+				switch (closestObject) {
+					case 'S':
+						red += 255;
+						green += 255;
+						blue += 0;
+						break;
+					case 'B':
+						red += 255;
+						green += 155;
+						blue += 0;
+						break;
+					case 'T':
+						red += 0;
+						green += 200;
+						blue += 0;
+						break;
+					case 'P':
+						if (!isBlack(hitReturnData.local_hit_point.x, hitReturnData.local_hit_point.y, hitReturnData.local_hit_point.z)) {
+							red += 255;
+							green += 255;
+							blue += 255;
+						}
+					default:
+						break;
+				}
+				pointIndex++;
+			}
+			
+			red = red / numSamples;
+			green = green / numSamples;
+			blue = blue / numSamples;
+
+			ofColor pixelColor = ofColor(red*ambient.ls, green*ambient.ls, blue*ambient.ls);
+			img.setColor(j, i, pixelColor);
+		}
+	}
+	delete[] points;
 	img.update();
 
 
